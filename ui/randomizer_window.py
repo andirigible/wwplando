@@ -1,6 +1,7 @@
 
-from PySide.QtGui import *
-from PySide.QtCore import *
+from PySide2.QtGui import *
+from PySide2.QtWidgets import *
+from PySide2.QtCore import *
 
 from ui.ui_randomizer_window import Ui_MainWindow
 from ui.options import OPTIONS, NON_PERMALINK_OPTIONS
@@ -54,6 +55,9 @@ class WWRandomizerWindow(QMainWindow):
     self.ui.custom_player_model.currentIndexChanged.connect(self.custom_model_changed)
     self.ui.player_in_casual_clothes.clicked.connect(self.custom_model_changed)
     
+    self.ui.plando_text_path.editingFinished.connect(self.update_settings)
+    self.ui.plando_text_browse_button.clicked.connect(self.browse_for_plando_text)
+
     for option_name in OPTIONS:
       widget = getattr(self.ui, option_name)
       if isinstance(widget, QAbstractButton):
@@ -78,7 +82,7 @@ class WWRandomizerWindow(QMainWindow):
     
     self.update_settings()
     
-    self.setWindowTitle("Wind Waker Randomizer %s" % VERSION)
+    self.setWindowTitle("Wind Waker Plandomizer %s" % VERSION)
     
     icon_path = os.path.join(ASSETS_PATH, "icon.ico")
     self.setWindowIcon(QIcon(icon_path))
@@ -126,17 +130,22 @@ class WWRandomizerWindow(QMainWindow):
   def randomize(self):
     clean_iso_path = self.settings["clean_iso_path"].strip()
     output_folder = self.settings["output_folder"].strip()
+    plando_text_path = self.settings["plando_text_path"].strip()
     self.settings["clean_iso_path"] = clean_iso_path
     self.settings["output_folder"] = output_folder
+    self.settings["plando_text_path"] = plando_text_path
     self.ui.clean_iso_path.setText(clean_iso_path)
     self.ui.output_folder.setText(output_folder)
+    self.ui.plando_text_path.setText(plando_text_path)
     
     if not os.path.isfile(clean_iso_path):
-      QMessageBox.warning(self, "Clean ISO path not specified", "Must specify path to clean your Wind Waker ISO (USA).")
+      QMessageBox.warning(self, "Clean ISO path not specified", "Must specify path to your clean Wind Waker ISO (USA).")
       return
     if not os.path.isdir(output_folder):
       QMessageBox.warning(self, "No output folder specified", "Must specify a valid output folder for the randomized files.")
       return
+    if not os.path.isfile(plando_text_path):
+      QMessageBox.warning(self, "Plando text file not specified", "Must specify path to your plando text file.")
     
     seed = self.settings["seed"]
     seed = self.sanitize_seed(seed)
@@ -160,7 +169,7 @@ class WWRandomizerWindow(QMainWindow):
     self.progress_dialog = RandomizerProgressDialog("Randomizing", "Initializing...", max_progress_val)
     
     try:
-      rando = Randomizer(seed, clean_iso_path, output_folder, options, permalink=permalink)
+      rando = Randomizer(seed, clean_iso_path, output_folder, plando_text_path, options, permalink=permalink)
     except TooFewProgressionLocationsError as e:
       error_message = str(e)
       self.randomization_failed(error_message)
@@ -286,6 +295,7 @@ class WWRandomizerWindow(QMainWindow):
     self.settings["clean_iso_path"] = self.ui.clean_iso_path.text()
     self.settings["output_folder"] = self.ui.output_folder.text()
     self.settings["seed"] = self.ui.seed.text()
+    self.settings["plando_text_path"] = self.ui.plando_text_path.text()
     
     self.disable_invalid_cosmetic_options()
     
@@ -298,12 +308,21 @@ class WWRandomizerWindow(QMainWindow):
     self.encode_permalink()
     
     self.update_total_progress_locations()
+
+  def update_permalink_from_plando(self):
+    if not os.path.isfile(self.ui.plando_text_path.text()):
+      return
+    with open(self.ui.plando_text_path.text()) as f:
+      for line in f.readlines():
+        if line.startswith("Permalink"):
+          permalink = line.split(":")[1].strip()
+          self.decode_permalink(permalink)
   
   def update_total_progress_locations(self):
     options = OrderedDict()
     for option_name in OPTIONS:
       options[option_name] = self.get_option_value(option_name)
-    num_progress_locations = Logic.get_num_progression_locations_static(self.cached_item_locations, options)
+    num_progress_locations = Logic.get_num_progression_locations_static(self.cached_item_locations, {}, options)
     
     text = "Where Should Progress Items Appear? (Selected: %d Possible Progression Locations)" % num_progress_locations
     self.ui.groupBox.setTitle(text)
@@ -387,7 +406,7 @@ class WWRandomizerWindow(QMainWindow):
     if given_version_num != VERSION:
       QMessageBox.critical(
         self, "Invalid permalink",
-        "The permalink you pasted is for version %s of the randomizer, it cannot be used with the version you are currently using (%s)." % (given_version_num, VERSION)
+        "The permalink you pasted is for version %s of the plandomizer, it cannot be used with the version you are currently using (%s)." % (given_version_num, VERSION)
       )
       return
     
@@ -452,6 +471,19 @@ class WWRandomizerWindow(QMainWindow):
     if not output_folder_path:
       return
     self.ui.output_folder.setText(output_folder_path)
+    self.update_settings()
+
+  def browse_for_plando_text(self):
+    if self.settings["plando_text_path"] and os.path.isfile(self.settings["plando_text_path"]):
+      default_dir = os.path.dirname(self.settings["plando_text_path"])
+    else:
+      default_dir = None
+
+    plando_text_path, selected_filter = QFileDialog.getOpenFileName(self, "Select plain text plando file", default_dir, "Plain text (*.txt)")
+    if not plando_text_path:
+      return
+    self.ui.plando_text_path.setText(plando_text_path)
+    self.update_permalink_from_plando()
     self.update_settings()
   
   def eventFilter(self, target, event):
@@ -678,10 +710,10 @@ class WWRandomizerWindow(QMainWindow):
       self.set_color(option_name, self.custom_colors[color_name])
   
   def open_about(self):
-    text = """Wind Waker Randomizer Version %s<br><br>
-      Created by LagoLunatic<br><br>
-      Report issues here:<br><a href=\"https://github.com/LagoLunatic/wwrando/issues\">https://github.com/LagoLunatic/wwrando/issues</a><br><br>
-      Source code:<br><a href=\"https://github.com/LagoLunatic/wwrando\">https://github.com/LagoLunatic/wwrando</a>""" % VERSION
+    text = """Wind Waker Plandomizer Version %s<br><br>
+      Created by AndiRigible, from LagoLunatic's Wind Waker Randomizer<br><br>
+      Report issues here:<br><a href=\"https://github.com/andirigible/wwplando/issues\">https://github.com/andirigible/wwplando/issues</a><br><br>
+      Source code:<br><a href=\"https://github.com/andirigible/wwplando\">https://github.com/andirigible/wwplando</a>""" % VERSION
     
     self.about_dialog = QMessageBox()
     self.about_dialog.setTextFormat(Qt.TextFormat.RichText)

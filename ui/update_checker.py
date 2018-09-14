@@ -6,8 +6,8 @@ from distutils.version import LooseVersion
 
 from randomizer import VERSION
 
-LATEST_RELEASE_DOWNLOAD_PAGE_URL = "https://github.com/LagoLunatic/wwrando/releases/latest"
-LATEST_RELEASE_API_URL = "https://api.github.com/repos/lagolunatic/wwrando/releases/latest"
+LATEST_RELEASE_DOWNLOAD_PAGE_URL = "https://github.com/andirigible/wwplando/releases/latest"
+LATEST_RELEASE_API_URL = "https://api.github.com/repos/andirigible/wwplando/releases/latest"
 
 def check_for_updates():
   try:

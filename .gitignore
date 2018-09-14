@@ -5,3 +5,4 @@ settings.txt
 /dist
 /models/*
 !/models/About Custom Models.txt
+parse_locations_to_plando.py

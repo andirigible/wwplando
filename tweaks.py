@@ -609,7 +609,7 @@ def modify_title_screen_logo(self):
   write_u16(data, 0x162, 0x106) # Increase Y pos by 16 pixels (0xF6 -> 0x106)
 
 def update_game_name_icon_and_banners(self):
-  new_game_name = "Wind Waker Randomized %s" % self.seed
+  new_game_name = "Wind Waker Plando %s" % self.seed
   banner_data = self.get_raw_file("files/opening.bnr")
   write_str(banner_data, 0x1860, new_game_name, 0x40)
   
@@ -618,7 +618,7 @@ def update_game_name_icon_and_banners(self):
   write_str(boot_data, 0, new_game_id, 6)
   
   dol_data = self.get_raw_file("sys/main.dol")
-  new_memory_card_game_name = "Wind Waker Randomizer"
+  new_memory_card_game_name = "Wind Waker Plando"
   write_str(dol_data, address_to_offset(0x80339690), new_memory_card_game_name, 21)
   
   new_image_file_path = os.path.join(ASSETS_PATH, "banner.png")

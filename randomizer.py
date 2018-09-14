@@ -43,12 +43,14 @@ class TooFewProgressionLocationsError(Exception):
   pass
 
 class Randomizer:
-  def __init__(self, seed, clean_iso_path, randomized_output_folder, options, permalink=None, dry_run=False):
+  def __init__(self, seed, clean_iso_path, randomized_output_folder, plando_text_path, options, permalink=None, dry_run=False):
     self.randomized_output_folder = randomized_output_folder
     self.options = options
     self.seed = seed
     self.permalink = permalink
     self.dry_run = dry_run
+
+    self.plando_text_path = plando_text_path
     
     self.integer_seed = int(hashlib.md5(self.seed.encode('utf-8')).hexdigest(), 16)
     self.rng = self.get_new_rng()
@@ -158,7 +160,7 @@ class Randomizer:
     
     self.custom_model_name = "Link"
     
-    self.logic = Logic(self)
+    self.logic = Logic(self, plando_text_path)
     
     num_progress_locations = self.logic.get_num_progression_locations()
     num_progress_items = self.logic.get_num_progression_items()
@@ -505,7 +507,7 @@ class Randomizer:
   def calculate_playthrough_progression_spheres(self):
     progression_spheres = []
     
-    logic = Logic(self)
+    logic = Logic(self, self.plando_text_path)
     previously_accessible_locations = []
     game_beatable = False
     while logic.unplaced_progress_items:
@@ -658,32 +660,6 @@ class Randomizer:
   
   def write_spoiler_log(self):
     spoiler_log = self.get_log_header()
-    
-    # Write progression spheres.
-    spoiler_log += "Playthrough:\n"
-    progression_spheres = self.calculate_playthrough_progression_spheres()
-    all_progression_sphere_locations = [loc for locs in progression_spheres for loc in locs]
-    zones, max_location_name_length = self.get_zones_and_max_location_name_len(all_progression_sphere_locations)
-    format_string = "      %-" + str(max_location_name_length+1) + "s %s\n"
-    for i, progression_sphere in enumerate(progression_spheres):
-      spoiler_log += "%d:\n" % (i+1)
-      
-      for zone_name, locations_in_zone in zones.items():
-        if not any(loc for (loc, _) in locations_in_zone if loc in progression_sphere):
-          # No locations in this zone are used in this sphere.
-          continue
-        
-        spoiler_log += "  %s:\n" % zone_name
-        
-        for (location_name, specific_location_name) in locations_in_zone:
-          if location_name in progression_sphere:
-            if location_name == "Ganon's Tower - Rooftop":
-              item_name = "Defeat Ganondorf"
-            else:
-              item_name = self.logic.done_item_locations[location_name]
-            spoiler_log += format_string % (specific_location_name + ":", item_name)
-      
-    spoiler_log += "\n\n\n"
     
     # Write item locations.
     spoiler_log += "All item locations:\n"

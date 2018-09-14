@@ -7,16 +7,26 @@ import tweaks
 
 def randomize_items(self):
   print("Randomizing items...")
+
+  # If the plando placed items in every location, then we skip all this
+  if len(self.logic.remaining_item_locations) == 0:
+    return
   
   if not self.options.get("keylunacy"):
     randomize_dungeon_items(self)
   
+  if len(self.logic.remaining_item_locations) == 0 or len(self.logic.unplaced_progress_items) == 0:
+    return
+
   randomize_progression_items(self)
+
+  if len(self.logic.remaining_item_locations) == 0 or len(self.logic.unplaced_nonprogress_items) == 0:
+    return
   
   # Place unique non-progress items.
   while self.logic.unplaced_nonprogress_items:
     accessible_undone_locations = self.logic.get_accessible_remaining_locations()
-    
+
     item_name = self.rng.choice(self.logic.unplaced_nonprogress_items)
     
     possible_locations = self.logic.filter_locations_valid_for_item(accessible_undone_locations, item_name)
@@ -34,11 +44,15 @@ def randomize_items(self):
     for location_name in inaccessible_locations:
       print(location_name)
   
+  if len(self.logic.remaining_item_locations) == 0 or len(self.logic.unplaced_consumable_items) == 0:
+    return
+
   # Fill remaining unused locations with consumables (Rupees, spoils, and bait).
   locations_to_place_consumables_at = self.logic.remaining_item_locations.copy()
   for location_name in locations_to_place_consumables_at:
     possible_items = self.logic.filter_items_valid_for_location(self.logic.unplaced_consumable_items, location_name)
-    item_name = self.rng.choice(possible_items)
+    if possible_items:
+      item_name = self.rng.choice(possible_items)
     self.logic.set_location_to_item(location_name, item_name)
 
 def randomize_dungeon_items(self):
@@ -107,8 +121,10 @@ def place_dungeon_item(self, item_name):
 
 def randomize_progression_items(self):
   accessible_undone_locations = self.logic.get_accessible_remaining_locations(for_progression=True)
+  # In the plando, we assume this is zero because the plando specified all locations, which is fine
   if len(accessible_undone_locations) == 0:
-    raise Exception("No progress locations are accessible at the very start of the game!")
+    return
+    # raise Exception("No progress locations are accessible at the very start of the game!")
   
   # Place progress items.
   previously_accessible_undone_locations = []
