@@ -8,6 +8,7 @@ from random import Random
 from collections import OrderedDict
 import hashlib
 import yaml
+from datetime import datetime
 
 from fs_helpers import *
 from wwlib.yaz0_decomp import Yaz0Decompressor
@@ -708,12 +709,15 @@ class Randomizer:
       f.write(spoiler_log)
   
   def write_error_log(self, error_message):
-    error_log_str = self.get_log_header()
-    
-    error_log_str += error_message
-    
     error_log_output_path = os.path.join(self.randomized_output_folder, "WW Random %s - Error Log.txt" % self.seed)
-    with open(error_log_output_path, "w") as f:
+    error_log_str = 0
+    if os.path.isfile(error_log_output_path) and os.path.getsize(error_log_output_path) > 0:
+      error_log_str = self.get_log_header()
+    
+    error_log_str += datetime.now().strftime("Errors occurred on %Y-%m-%d at %H:%M:%S")
+
+    error_log_str += error_message
+    with open(error_log_output_path, "a") as f:
       f.write(error_log_str)
   
   def disassemble_all_code(self):

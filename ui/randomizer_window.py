@@ -279,6 +279,8 @@ class WWRandomizerWindow(QMainWindow):
       self.ui.output_folder.setText(self.settings["output_folder"])
     if "seed" in self.settings:
       self.ui.seed.setText(self.settings["seed"])
+    if "plando_text_path" in self.settings:
+      self.ui.plando_text_path.setText(self.settings["plando_text_path"])
     
     for option_name in OPTIONS:
       if option_name in self.settings:

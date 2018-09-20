@@ -168,24 +168,12 @@ class Logic:
 
     # Load the plando and make sure it's all valid        
     self.plando = self.load_plando(plando_text_path)
-    self.check_plando_items()
-    self.check_plando_locations()
     self.place_plando_items()
     # self.unplaced_plando_items = list(self.plando.values())
 
   def place_plando_items(self):
     for location, item in self.plando.items():
       self.set_location_to_item(location, item)
-
-  def check_plando_items(self):
-    for item in self.plando.values():
-      if self.clean_item_name(item) not in self.all_cleaned_item_names:
-        raise Exception("[Plando] Invalid item: " + item)
-
-  def check_plando_locations(self):
-    for location in self.plando.keys():
-      if location not in self.item_locations.keys():
-        raise Exception("[Plando] Invalid location: " + location)
   
   def set_location_to_item(self, location_name, item_name):
     print("%s == %s" % (location_name, item_name))
@@ -781,17 +769,27 @@ class Logic:
 
   def load_plando(self, plando_file):
     plandic = {}
+    errors = []
     with open(plando_file) as f:
       for line in f.readlines():
-        location, item = line.split(":")
-        location = location.strip()
-        item = item.strip()
-        if location == "Permalink":
+        if ":" not in line:
           continue
-        if not item:
-          continue
-        print('"%s": %s' % (location, item))
-        plandic[location] = item
+        if line.strip():
+          location, item = line.split(":", 1)
+          location = location.strip()
+          item = item.strip()
+          if location == "Permalink" or not location or not item:
+            continue
+          if location not in self.item_locations:
+            errors.append("Location not found: " + location)
+            continue
+          if self.clean_item_name(item) not in self.all_cleaned_item_names:
+            errors.append("Item not found: " + item)
+            continue
+          # print('"%s": %s' % (location, item))
+          if errors:
+            self.rando.write_error_log(self, "\n".join(errors))
+          plandic[location] = item
     return plandic
 
   # def choose_plando_item_valid(self, item_name):
