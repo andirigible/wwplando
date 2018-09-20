@@ -11,3 +11,4 @@ with ZipFile("./dist/" + zip_name, "w") as zip:
   zip.write("./dist/%s.exe" % base_name_with_version, arcname="%s.exe" % base_name)
   zip.write("README.md", arcname="README.txt")
   zip.write("./models/About Custom Models.txt", arcname="./models/About Custom Models.txt")
+  zip.write("plando_defaults.txt", arcname="plando_defaults.txt")
