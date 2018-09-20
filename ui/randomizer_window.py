@@ -1,7 +1,12 @@
 
 from PySide2.QtGui import *
+<<<<<<< HEAD
 from PySide2.QtWidgets import *
 from PySide2.QtCore import *
+=======
+from PySide2.QtCore import *
+from PySide2.QtWidgets import *
+>>>>>>> 5fe88471797a2e259b373ba4d12ebf363a8425ae
 
 from ui.ui_randomizer_window import Ui_MainWindow
 from ui.options import OPTIONS, NON_PERMALINK_OPTIONS
@@ -28,6 +33,7 @@ from logic.logic import Logic
 
 class WWRandomizerWindow(QMainWindow):
   VALID_SEED_CHARACTERS = "-_'%%.%s%s" % (string.ascii_letters, string.digits)
+  MAX_SEED_LENGTH = 42 # Limited by maximum length of game name in banner
   
   def __init__(self):
     super(WWRandomizerWindow, self).__init__()
@@ -125,6 +131,7 @@ class WWRandomizerWindow(QMainWindow):
     seed = str(seed)
     seed = seed.strip()
     seed = "".join(char for char in seed if char in self.VALID_SEED_CHARACTERS)
+    seed = seed[:self.MAX_SEED_LENGTH]
     return seed
   
   def randomize(self):
