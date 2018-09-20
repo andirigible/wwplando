@@ -130,9 +130,14 @@ def randomize_progression_items(self):
   previously_accessible_undone_locations = []
   while self.logic.unplaced_progress_items:
     accessible_undone_locations = self.logic.get_accessible_remaining_locations(for_progression=True)
-    
+    all_acc_loc = self.logic.get_accessible_remaining_locations()
+
+    # We want to differentiate between having no progression locations left and having no locations left at all
+    if not accessible_undone_locations and not len(all_acc_loc) > len(accessible_undone_locations):
+      raise Exception("No locations left to place progress items! Remaining accessible locations: " + len(all_acc_loc))
+
     if not accessible_undone_locations:
-      raise Exception("No locations left to place progress items!")
+      raise Exception("No locations left to place progress items! Please select more progression categories.")
     
     # If the player gained access to any dungeon item locations, we need to give them those items.
     newly_accessible_dungeon_item_locations = [
@@ -186,13 +191,14 @@ def randomize_progression_items(self):
     if len(possible_items_when_not_placing_useful) == 0 and len(possible_items) > 0:
       possible_items_when_not_placing_useful = possible_items
     
-    if must_place_useful_item or should_place_useful_item:
+    # We only place a useful item if we absolutely have to; otherwise we assume the plandomizer accounted for that.
+    if must_place_useful_item:
       shuffled_list = possible_items.copy()
       self.rng.shuffle(shuffled_list)
       item_name = self.logic.get_first_useful_item(shuffled_list, for_progression=True)
       if item_name is None:
         if must_place_useful_item:
-          raise Exception("No useful progress items to place!")
+          raise Exception("No useful progress items to place! Remaining items: " + ", ".join(possible_items))
         else:
           item_name = self.rng.choice(possible_items_when_not_placing_useful)
     else:

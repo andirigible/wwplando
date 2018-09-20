@@ -6,3 +6,5 @@ settings.txt
 /models/*
 !/models/About Custom Models.txt
 parse_locations_to_plando.py
+rando_version.txt
+dist_hist/

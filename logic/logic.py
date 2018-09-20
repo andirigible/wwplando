@@ -788,7 +788,7 @@ class Logic:
             continue
           # print('"%s": %s' % (location, item))
           if errors:
-            self.rando.write_error_log(self, "\n".join(errors))
+            self.rando.write_error_log("\n".join(errors))
           plandic[location] = item
     return plandic
 

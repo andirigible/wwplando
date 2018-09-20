@@ -28,6 +28,8 @@ from randomizers import dungeon_entrances
 
 with open(os.path.join(RANDO_ROOT_PATH, "version.txt"), "r") as f:
   VERSION = f.read().strip()
+with open(os.path.join(RANDO_ROOT_PATH, "rando_version.txt"), "r") as f:
+  RANDO_VERSION = f.read().strip()
 
 VERSION_WITHOUT_COMMIT = VERSION
 
@@ -710,7 +712,7 @@ class Randomizer:
   
   def write_error_log(self, error_message):
     error_log_output_path = os.path.join(self.randomized_output_folder, "WW Random %s - Error Log.txt" % self.seed)
-    error_log_str = 0
+    error_log_str = ''
     if os.path.isfile(error_log_output_path) and os.path.getsize(error_log_output_path) > 0:
       error_log_str = self.get_log_header()
     
