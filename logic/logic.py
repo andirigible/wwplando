@@ -39,7 +39,7 @@ class Logic:
     ]),
   ])
   
-  def __init__(self, rando):
+  def __init__(self, rando, plando_text_path):
     self.rando = rando
     
     
@@ -634,6 +634,7 @@ class Logic:
     progress_locations = Logic.filter_locations_for_progression_static(
       self.item_locations.keys(),
       self.item_locations,
+      {},
       self.rando.options,
       filter_sunken_treasure=filter_sunken_treasure
     )
