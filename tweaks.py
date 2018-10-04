@@ -1245,20 +1245,16 @@ def change_starting_clothes(self):
 def shorten_auction_intro_event(self):
   event_list = self.get_arc("files/res/Stage/Orichh/Stage.arc").get_file("event_list.dat")
   wind_shrine_event = event_list.events_by_name["AUCTION_START"]
-  auction = next(actor for actor in wind_shrine_event.actors if actor.name == "Auction")
   camera = next(actor for actor in wind_shrine_event.actors if actor.name == "CAMERA")
   
   pre_pan_delay = camera.actions[2]
   pan_action = camera.actions[3]
   post_pan_delay = camera.actions[4]
   
-  # Remove the 30 frame delays before and after panning.
-  camera.actions.remove(pre_pan_delay)
+  # Remove the 200 frame long panning action and the 30 frame delay after panning.
+  # We don't remove the 30 frame delay before panning, because of the intro is completely removed or only a couple frames long, there is a race condition where the timer entity may not be finished being asynchronously created until the intro is over. If this happens the auction entity will have no reference to the timer entity, causing a crash later on.
+  camera.actions.remove(pan_action)
   camera.actions.remove(post_pan_delay)
-  
-  # The actual panning action cannot be skipped for some unknown reason. It would appear to work but the game would crash a little bit later.
-  # So instead we change the duration of the panning to be only 1 frame long so it appears to be skipped.
-  pan_action.get_prop("Timer").value = 1
 
 def disable_invisible_walls(self):
   # Remove some invisible walls to allow sequence breaking.
@@ -1301,3 +1297,19 @@ def update_text_for_swordless(self):
   msg = self.bmg.messages_by_id[1590]
   msg.string = "\\{1A 05 00 00 00}! Do not run! Trust in the\n"
   msg.string += "power of the Skull Hammer!"
+
+def add_hint_signs(self):
+  # Add a hint sign to the second room of DRC with an arrow pointing to the passage to the Big Key Chest.
+  new_message_id = 847
+  msg = self.bmg.add_new_message(new_message_id)
+  msg.string = "\\{1A 05 00 00 15}" # Right arrow
+  msg.text_box_type = 2 # Wooden sign message box
+  msg.initial_draw_type = 1 # Instant initial message speed
+  msg.text_alignment = 3 # Centered text alignment
+  
+  dzx = self.get_arc("files/res/Stage/M_NewD2/Room2.arc").get_file("room.dzr")
+  bomb_flowers = [actor for actor in dzx.entries_by_type_and_layer("ACTR", None) if actor.name == "BFlower"]
+  bomb_flowers[1].name = "Kanban"
+  bomb_flowers[1].params = new_message_id
+  bomb_flowers[1].y_rot = 0x2000
+  bomb_flowers[1].save_changes()

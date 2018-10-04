@@ -9,8 +9,6 @@ import os
 from logic.item_types import PROGRESS_ITEMS, NONPROGRESS_ITEMS, CONSUMABLE_ITEMS, DUNGEON_PROGRESS_ITEMS, DUNGEON_NONPROGRESS_ITEMS
 from paths import LOGIC_PATH
 
-from random import Random
-
 class Logic:
   DUNGEON_NAMES = OrderedDict([
     ("DRC",  "Dragon Roost Cavern"),
@@ -39,27 +37,52 @@ class Logic:
     ]),
   ])
   
-  def __init__(self, rando, plando_text_path):
+  def __init__(self, rando):
     self.rando = rando
-
-    # =================
-    # ITEM REGISTRATION
-    # =================
     
-    # Register items
+    
+    # Initialize location related attributes.
+    self.item_locations = Logic.load_and_parse_item_locations()
+    self.load_and_parse_macros()
+    
+    self.locations_by_zone_name = OrderedDict()
+    for location_name in self.item_locations:
+      zone_name, specific_location_name = self.split_location_name_by_zone(location_name)
+      if zone_name not in self.locations_by_zone_name:
+        self.locations_by_zone_name[zone_name] = []
+      self.locations_by_zone_name[zone_name].append(location_name)
+    
+    self.remaining_item_locations = list(self.item_locations.keys())
+    self.prerandomization_dungeon_item_locations = OrderedDict()
+    
+    self.done_item_locations = OrderedDict()
+    for location_name in self.item_locations:
+      self.done_item_locations[location_name] = None
+    
+    self.rock_spire_shop_ship_locations = []
+    for location_name, location in self.item_locations.items():
+      if location_name.startswith("Rock Spire Isle - Beedle's Special Shop Ship - "):
+        self.rock_spire_shop_ship_locations.append(location_name)
+    
+    # Sync the logic macros with the randomizer.
+    self.update_dungeon_entrance_macros()
+    self.update_chart_macros()
+    self.update_rematch_bosses_macros()
+    self.update_sword_mode_macros()
+    
+    
+    # Initialize item related attributes.
     self.all_progress_items = PROGRESS_ITEMS.copy()
     self.all_nonprogress_items = NONPROGRESS_ITEMS.copy()
     self.all_consumable_items = CONSUMABLE_ITEMS.copy()
     
-    # Register charts
     self.triforce_chart_names = []
     self.treasure_chart_names = []
     for i in range(1, 8+1):
       self.triforce_chart_names.append("Triforce Chart %d" % i)
     for i in range(1, 41+1):
       self.treasure_chart_names.append("Treasure Chart %d" % i)
-
-    # Remove swords and Hurricane Spin in Swordless mode
+    
     if self.rando.options.get("sword_mode") == "Swordless":
       self.all_progress_items = [
         item_name for item_name in self.all_progress_items
@@ -70,7 +93,6 @@ class Logic:
         if item_name != "Hurricane Spin"
       ]
     
-    # Make charts progress items if necessary
     if self.rando.options.get("progression_triforce_charts"):
       self.all_progress_items += self.triforce_chart_names
     else:
@@ -91,8 +113,15 @@ class Logic:
     for dungeon_item_name in (DUNGEON_PROGRESS_ITEMS + DUNGEON_NONPROGRESS_ITEMS):
       regular_item_name = dungeon_item_name.split(" ", 1)[1]
       self.rando.item_name_to_id[dungeon_item_name] = self.rando.item_name_to_id[regular_item_name]
-
-    # Mark all items as unplaced
+    
+    self.all_cleaned_item_names = []
+    for item_name in (self.all_progress_items + self.all_nonprogress_items + self.all_consumable_items):
+      cleaned_item_name = self.clean_item_name(item_name)
+      if cleaned_item_name not in self.all_cleaned_item_names:
+        self.all_cleaned_item_names.append(cleaned_item_name)
+    
+    self.make_useless_progress_items_nonprogress()
+    
     self.unplaced_progress_items = self.all_progress_items.copy()
     self.unplaced_nonprogress_items = self.all_nonprogress_items.copy()
     self.unplaced_consumable_items = self.all_consumable_items.copy()
@@ -101,61 +130,17 @@ class Logic:
     
     # Replace progress items that are part of a group with the group name instead.
     for group_name, item_names in self.progress_item_groups.items():
-      for item_name in item_names:
-        self.unplaced_progress_items.remove(item_name)
-    self.unplaced_progress_items += self.progress_item_groups.keys()
+      if all(item_name in self.unplaced_progress_items for item_name in item_names):
+        self.unplaced_progress_items.append(group_name)
+        for item_name in item_names:
+          self.unplaced_progress_items.remove(item_name)
     
-    # Set up mock inventory
     self.currently_owned_items = []
     
-    # Clean up item names
-    self.all_cleaned_item_names = []
-    for item_name in (self.all_progress_items + self.all_nonprogress_items + self.all_consumable_items):
-      cleaned_item_name = self.clean_item_name(item_name)
-      if cleaned_item_name not in self.all_cleaned_item_names:
-        self.all_cleaned_item_names.append(cleaned_item_name)
-
-    # =====================
-    # LOCATION REGISTRATION
-    # =====================
-    
-    # Load locations and macros from files
-    self.item_locations = Logic.load_and_parse_item_locations()
-    self.load_and_parse_macros()
-    
-    # Make a dict mapping locations to their zones
-    self.locations_by_zone_name = OrderedDict()
-    for location_name in self.item_locations:
-      zone_name, specific_location_name = self.split_location_name_by_zone(location_name)
-      if zone_name not in self.locations_by_zone_name:
-        self.locations_by_zone_name[zone_name] = []
-      self.locations_by_zone_name[zone_name].append(location_name)
-    
-    # Initialize some more location records
-    self.remaining_item_locations = list(self.item_locations.keys())
-    self.prerandomization_dungeon_item_locations = OrderedDict()
-    
-    # Add all locations to the "done" pile, but set their values to None
-    self.done_item_locations = OrderedDict()
-    for location_name in self.item_locations:
-      self.done_item_locations[location_name] = None
-    
-    self.rock_spire_shop_ship_locations = []
-    for location_name, location in self.item_locations.items():
-      if location_name.startswith("Rock Spire Isle - Beedle's Special Shop Ship - "):
-        self.rock_spire_shop_ship_locations.append(location_name)
-    
-    # Sync the logic macros with the randomizer.
-    self.update_dungeon_entrance_macros()
-    self.update_chart_macros()
-    self.update_rematch_bosses_macros()
-    self.update_sword_mode_macros()
-    
-    # Put starting items in mock inventory
     for item_name in self.rando.starting_items:
       self.add_owned_item(item_name)
     
-
+    # Remove starting items from item groups.
     for group_name, group_item_names in self.progress_item_groups.items():
       items_to_remove_from_group = [
         item_name for item_name in group_item_names
@@ -165,18 +150,9 @@ class Logic:
         self.progress_item_groups[group_name].remove(item_name)
       if len(self.progress_item_groups[group_name]) == 0:
         self.unplaced_progress_items.remove(group_name)
-
-    # Load the plando and make sure it's all valid        
-    self.plando = self.load_plando(plando_text_path)
-    self.place_plando_items()
-    # self.unplaced_plando_items = list(self.plando.values())
-
-  def place_plando_items(self):
-    for location, item in self.plando.items():
-      self.set_location_to_item(location, item)
   
   def set_location_to_item(self, location_name, item_name):
-    print("%s == %s" % (location_name, item_name))
+    #print("Setting %s to %s" % (location_name, item_name))
     
     if self.done_item_locations[location_name]:
       raise Exception("Location was used twice: " + location_name)
@@ -207,9 +183,6 @@ class Logic:
   def get_num_progression_items(self):
     num_progress_items = 0
     for item_name in self.unplaced_progress_items:
-      # We don't count items that are in the plando
-      # if item_name in self.plando.items():
-      #   continue
       if item_name in self.progress_item_groups:
         group_name = item_name
         for item_name in self.progress_item_groups[group_name]:
@@ -220,14 +193,13 @@ class Logic:
     return num_progress_items
   
   def get_num_progression_locations(self):
-    return Logic.get_num_progression_locations_static(self.item_locations, self.plando, self.rando.options)
+    return Logic.get_num_progression_locations_static(self.item_locations, self.rando.options)
   
   @staticmethod
-  def get_num_progression_locations_static(item_locations, plando, options):
+  def get_num_progression_locations_static(item_locations, options):
     progress_locations = Logic.filter_locations_for_progression_static(
       item_locations.keys(),
       item_locations,
-      plando,
       options,
       filter_sunken_treasure=True
     )
@@ -297,7 +269,7 @@ class Logic:
     if item_name in self.progress_item_groups:
       group_name = item_name
       for item_name in self.progress_item_groups[group_name]:
-        self.add_owned_item(item_name)
+        self.currently_owned_items.append(item_name)
     else:
       self.add_owned_item(item_name)
   
@@ -305,7 +277,7 @@ class Logic:
     if item_name in self.progress_item_groups:
       group_name = item_name
       for item_name in self.progress_item_groups[group_name]:
-        self.remove_owned_item(item_name)
+        self.currently_owned_items.remove(item_name)
     else:
       self.remove_owned_item(item_name)
   
@@ -416,13 +388,12 @@ class Logic:
     return Logic.filter_locations_for_progression_static(
       locations_to_filter,
       self.item_locations,
-      self.plando,
       self.rando.options,
       filter_sunken_treasure=filter_sunken_treasure
     )
   
   @staticmethod
-  def filter_locations_for_progression_static(locations_to_filter, item_locations, plando, options, filter_sunken_treasure=False):
+  def filter_locations_for_progression_static(locations_to_filter, item_locations, options, filter_sunken_treasure=False):
     filtered_locations = []
     for location_name in locations_to_filter:
       types = item_locations[location_name]["Types"]
@@ -468,11 +439,7 @@ class Logic:
       # During randomization they are handled by not considering the charts themselves to be progress items.
       # That results in the item randomizer considering these locations inaccessible until after all progress items are placed.
       # But when calculating the total number of progression locations, sunken treasures are filtered out entirely here so they can be specially counted elsewhere.
-
-      # If the location is in the plando, we won't be able to place anything else there
-      # if location_name in plando.keys():
-      #   continue
-
+      
       filtered_locations.append(location_name)
     
     return filtered_locations
@@ -512,14 +479,7 @@ class Logic:
     # Therefore we don't allow the other two items Zunari gives to be placed in the Magic Armor slot.
     if location_name == "Windfall Island - Zunari - Stock Exotic Flower in Zunari's Shop" and item_name in ["Town Flower", "Boat's Sail"]:
       return False
-
-    # If the location is in the plando and the item doesn't match, ban it
-    # if location_name in self.plando and self.plando[location_name] is not item_name:
-    #   return False
-
-    # if item_name in self.plando and self.choose_plando_item_valid(item_name):
-    #   self.unplaced_plando_items.remove(item_name)
-
+    
     return True
   
   def filter_items_by_any_valid_location(self, items, locations):
@@ -634,8 +594,50 @@ class Logic:
   
   def clean_item_name(self, item_name):
     # Remove parentheses from any item names that may have them. (Formerly Master Swords, though that's not an issue anymore.)
-    # Strip trailing & leading whitespace too so that we can use this with user input (plando files)
-    return item_name.strip().replace("(", "").replace(")", "")
+    return item_name.replace("(", "").replace(")", "")
+  
+  def make_useless_progress_items_nonprogress(self):
+    # Detect which progress items don't actually help access any locations with the user's current settings, and move those over to the nonprogress item list instead.
+    # This is so things like dungeons-only runs don't have a lot of useless items hogging the progress locations.
+    
+    filter_sunken_treasure = True
+    if self.rando.options.get("progression_triforce_charts") or self.rando.options.get("progression_treasure_charts"):
+      filter_sunken_treasure = False
+    progress_locations = Logic.filter_locations_for_progression_static(
+      self.item_locations.keys(),
+      self.item_locations,
+      self.rando.options,
+      filter_sunken_treasure=filter_sunken_treasure
+    )
+    
+    useful_items = []
+    for location_name in progress_locations:
+      requirement_expression = self.item_locations[location_name]["Need"]
+      useful_items += self.get_item_names_from_logical_expression_req(requirement_expression)
+    useful_items += self.get_item_names_by_req_name("Can Reach and Defeat Ganondorf")
+    
+    all_progress_items_filtered = []
+    for item_name in useful_items:
+      if item_name == "Progressive Sword" and self.rando.options.get("sword_mode") == "Swordless":
+        continue
+      if self.is_dungeon_item(item_name) and not self.rando.options.get("progression_dungeons"):
+        continue
+      if item_name not in self.all_progress_items:
+        if not (item_name.startswith("Triforce Chart ") or item_name.startswith("Treasure Chart")):
+          raise Exception("Item %s opens up progress locations but is not in the list of all progress items." % item_name)
+      if item_name in all_progress_items_filtered:
+        # Avoid duplicates
+        continue
+      all_progress_items_filtered.append(item_name)
+    
+    items_to_make_nonprogress = [
+      item_name for item_name in self.all_progress_items
+      if item_name not in all_progress_items_filtered
+    ]
+    for item_name in items_to_make_nonprogress:
+      #print(item_name)
+      self.all_progress_items.remove(item_name)
+      self.all_nonprogress_items.append(item_name)
   
   def split_location_name_by_zone(self, location_name):
     if " - " in location_name:
@@ -733,6 +735,60 @@ class Logic:
     else:
       return all(subexpression_results)
   
+  def get_item_names_by_req_name(self, req_name):
+    item_names = []
+    if req_name.startswith("Progressive "):
+      match = re.search(r"^(Progressive .+) x(\d+)$", req_name)
+      item_name = match.group(1)
+      item_names.append(item_name)
+    elif " Small Key x" in req_name:
+      match = re.search(r"^(.+ Small Key) x(\d+)$", req_name)
+      small_key_name = match.group(1)
+      item_names.append(small_key_name)
+    elif req_name.startswith("Can Access Other Location \""):
+      match = re.search(r"^Can Access Other Location \"([^\"]+)\"$", req_name)
+      other_location_name = match.group(1)
+      requirement_expression = self.item_locations[other_location_name]["Need"]
+      item_names += self.get_item_names_from_logical_expression_req(requirement_expression)
+    elif req_name in self.all_cleaned_item_names:
+      item_names.append(req_name)
+    elif req_name in self.macros:
+      logical_expression = self.macros[req_name]
+      item_names += self.get_item_names_from_logical_expression_req(logical_expression)
+    elif req_name == "Nothing":
+      pass
+    elif req_name == "Impossible":
+      pass
+    else:
+      raise Exception("Unknown requirement name: " + req_name)
+    
+    return item_names
+  
+  def get_item_names_from_logical_expression_req(self, logical_expression):
+    item_names = []
+    tokens = logical_expression.copy()
+    tokens.reverse()
+    while tokens:
+      token = tokens.pop()
+      if token == "|":
+        pass
+      elif token == "&":
+        pass
+      elif token == "(":
+        nested_expression = tokens.pop()
+        if nested_expression == "(":
+          # Nested parentheses
+          nested_expression = ["("] + tokens.pop()
+        result = self.get_item_names_from_logical_expression_req(nested_expression)
+        item_names += result
+        assert tokens.pop() == ")"
+      else:
+        # Subexpression.
+        sub_item_names = self.get_item_names_by_req_name(token)
+        item_names += sub_item_names
+    
+    return item_names
+  
   def check_progressive_item_req(self, req_name):
     match = re.search(r"^(Progressive .+) x(\d+)$", req_name)
     item_name = match.group(1)
@@ -765,72 +821,6 @@ class Logic:
     assert chart_name in self.all_cleaned_item_names
     
     return chart_name
-
-
-  def load_plando(self, plando_file):
-    plandic = {}
-    errors = []
-    with open(plando_file) as f:
-      for line in f.readlines():
-        if ":" not in line:
-          continue
-        if line.strip():
-          location, item = line.split(":", 1)
-          location = location.strip()
-          item = item.strip()
-          if location == "Permalink" or not location or not item:
-            continue
-          if location not in self.item_locations:
-            errors.append("Location not found: " + location)
-            continue
-          if self.clean_item_name(item) not in self.all_cleaned_item_names:
-            errors.append("Item not found: " + item)
-            continue
-          # print('"%s": %s' % (location, item))
-          if errors:
-            self.rando.write_error_log("\n".join(errors))
-          plandic[location] = item
-    return plandic
-
-  # def choose_plando_item_valid(self, item_name):
-  #   rng_list = []
-
-  #   for item in self.unplaced_plando_items:
-  #     if item_name == item:
-  #       rng_list.append(True)
-
-  #   if len(rng_list) == 0:
-  #     return True
-
-  #   skipcount = len(rng_list)
-  #   skip = 0
-
-  #   for item in self.unplaced_progress_items:
-  #     if item_name == item:
-  #       skip += 1
-  #       if skip > skipcount:
-  #         rng_list.append(False)
-
-  #   for item in self.unplaced_nonprogress_items:
-  #     if item_name == item:
-  #       skip += 1
-  #       if skip > skipcount:
-  #         rng_list.append(False)
-
-  #   for item in self.unplaced_consumable_items:
-  #     if item_name == item:
-  #       skip += 1
-  #       if skip > skipcount:
-  #         rng_list.append(False)
-
-  #   if len(rng_list) == 0:
-  #     raise Exception("The item " + item_name + " disappeared!")
-
-  #   if len(rng_list) == 1:
-  #     return rng_list[0]
-
-  #   return Random().choice(rng_list)
-
 
 class YamlOrderedDictLoader(yaml.SafeLoader):
   pass
