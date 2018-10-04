@@ -9,6 +9,8 @@ import os
 from logic.item_types import PROGRESS_ITEMS, NONPROGRESS_ITEMS, CONSUMABLE_ITEMS, DUNGEON_PROGRESS_ITEMS, DUNGEON_NONPROGRESS_ITEMS
 from paths import LOGIC_PATH
 
+from random import Random
+
 class Logic:
   DUNGEON_NAMES = OrderedDict([
     ("DRC",  "Dragon Roost Cavern"),
@@ -150,9 +152,18 @@ class Logic:
         self.progress_item_groups[group_name].remove(item_name)
       if len(self.progress_item_groups[group_name]) == 0:
         self.unplaced_progress_items.remove(group_name)
+
+    # Load the plando and make sure it's all valid        
+    self.plando = self.load_plando(plando_text_path)
+    self.place_plando_items()
+    # self.unplaced_plando_items = list(self.plando.values())
+
+  def place_plando_items(self):
+    for location, item in self.plando.items():
+      self.set_location_to_item(location, item)
   
   def set_location_to_item(self, location_name, item_name):
-    #print("Setting %s to %s" % (location_name, item_name))
+    print("%s == %s" % (location_name, item_name))
     
     if self.done_item_locations[location_name]:
       raise Exception("Location was used twice: " + location_name)
@@ -183,6 +194,9 @@ class Logic:
   def get_num_progression_items(self):
     num_progress_items = 0
     for item_name in self.unplaced_progress_items:
+      # We don't count items that are in the plando
+      # if item_name in self.plando.items():
+      #   continue
       if item_name in self.progress_item_groups:
         group_name = item_name
         for item_name in self.progress_item_groups[group_name]:
@@ -193,13 +207,14 @@ class Logic:
     return num_progress_items
   
   def get_num_progression_locations(self):
-    return Logic.get_num_progression_locations_static(self.item_locations, self.rando.options)
+    return Logic.get_num_progression_locations_static(self.item_locations, self.plando, self.rando.options)
   
   @staticmethod
-  def get_num_progression_locations_static(item_locations, options):
+  def get_num_progression_locations_static(item_locations, plando, options):
     progress_locations = Logic.filter_locations_for_progression_static(
       item_locations.keys(),
       item_locations,
+      plando,
       options,
       filter_sunken_treasure=True
     )
@@ -388,12 +403,13 @@ class Logic:
     return Logic.filter_locations_for_progression_static(
       locations_to_filter,
       self.item_locations,
+      self.plando,
       self.rando.options,
       filter_sunken_treasure=filter_sunken_treasure
     )
   
   @staticmethod
-  def filter_locations_for_progression_static(locations_to_filter, item_locations, options, filter_sunken_treasure=False):
+  def filter_locations_for_progression_static(locations_to_filter, item_locations, plando, options, filter_sunken_treasure=False):
     filtered_locations = []
     for location_name in locations_to_filter:
       types = item_locations[location_name]["Types"]
@@ -439,7 +455,11 @@ class Logic:
       # During randomization they are handled by not considering the charts themselves to be progress items.
       # That results in the item randomizer considering these locations inaccessible until after all progress items are placed.
       # But when calculating the total number of progression locations, sunken treasures are filtered out entirely here so they can be specially counted elsewhere.
-      
+
+      # If the location is in the plando, we won't be able to place anything else there
+      # if location_name in plando.keys():
+      #   continue
+
       filtered_locations.append(location_name)
     
     return filtered_locations
@@ -479,7 +499,14 @@ class Logic:
     # Therefore we don't allow the other two items Zunari gives to be placed in the Magic Armor slot.
     if location_name == "Windfall Island - Zunari - Stock Exotic Flower in Zunari's Shop" and item_name in ["Town Flower", "Boat's Sail"]:
       return False
-    
+
+    # If the location is in the plando and the item doesn't match, ban it
+    # if location_name in self.plando and self.plando[location_name] is not item_name:
+    #   return False
+
+    # if item_name in self.plando and self.choose_plando_item_valid(item_name):
+    #   self.unplaced_plando_items.remove(item_name)
+
     return True
   
   def filter_items_by_any_valid_location(self, items, locations):
@@ -594,7 +621,8 @@ class Logic:
   
   def clean_item_name(self, item_name):
     # Remove parentheses from any item names that may have them. (Formerly Master Swords, though that's not an issue anymore.)
-    return item_name.replace("(", "").replace(")", "")
+    # Strip trailing & leading whitespace too so that we can use this with user input (plando files)
+    return item_name.strip().replace("(", "").replace(")", "")
   
   def make_useless_progress_items_nonprogress(self):
     # Detect which progress items don't actually help access any locations with the user's current settings, and move those over to the nonprogress item list instead.
@@ -821,6 +849,72 @@ class Logic:
     assert chart_name in self.all_cleaned_item_names
     
     return chart_name
+
+
+  def load_plando(self, plando_file):
+    plandic = {}
+    errors = []
+    with open(plando_file) as f:
+      for line in f.readlines():
+        if ":" not in line:
+          continue
+        if line.strip():
+          location, item = line.split(":", 1)
+          location = location.strip()
+          item = item.strip()
+          if location == "Permalink" or not location or not item:
+            continue
+          if location not in self.item_locations:
+            errors.append("Location not found: " + location)
+            continue
+          if self.clean_item_name(item) not in self.all_cleaned_item_names:
+            errors.append("Item not found: " + item)
+            continue
+          # print('"%s": %s' % (location, item))
+          if errors:
+            self.rando.write_error_log("\n".join(errors))
+          plandic[location] = item
+    return plandic
+
+  # def choose_plando_item_valid(self, item_name):
+  #   rng_list = []
+
+  #   for item in self.unplaced_plando_items:
+  #     if item_name == item:
+  #       rng_list.append(True)
+
+  #   if len(rng_list) == 0:
+  #     return True
+
+  #   skipcount = len(rng_list)
+  #   skip = 0
+
+  #   for item in self.unplaced_progress_items:
+  #     if item_name == item:
+  #       skip += 1
+  #       if skip > skipcount:
+  #         rng_list.append(False)
+
+  #   for item in self.unplaced_nonprogress_items:
+  #     if item_name == item:
+  #       skip += 1
+  #       if skip > skipcount:
+  #         rng_list.append(False)
+
+  #   for item in self.unplaced_consumable_items:
+  #     if item_name == item:
+  #       skip += 1
+  #       if skip > skipcount:
+  #         rng_list.append(False)
+
+  #   if len(rng_list) == 0:
+  #     raise Exception("The item " + item_name + " disappeared!")
+
+  #   if len(rng_list) == 1:
+  #     return rng_list[0]
+
+  #   return Random().choice(rng_list)
+
 
 class YamlOrderedDictLoader(yaml.SafeLoader):
   pass
