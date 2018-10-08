@@ -124,7 +124,7 @@ def place_dungeon_item(self, item_name):
 
 def randomize_progression_items(self):
   accessible_undone_locations = self.logic.get_accessible_remaining_locations(for_progression=True)
-  # In the plando, we assume this is zero because the plando specified all locations, which is fine
+  # In the plando,if this is zero, we assume it's because the plando specified those locations, which is fine
   if len(accessible_undone_locations) == 0:
     return
     # raise Exception("No progress locations are accessible at the very start of the game!")
@@ -140,7 +140,7 @@ def randomize_progression_items(self):
       raise Exception("No locations left to place progress items! Remaining accessible locations: " + len(all_acc_loc))
 
     if not accessible_undone_locations:
-      raise Exception("No locations left to place progress items! Please select more progression categories.")
+      raise Exception("No locations left to place progress items! Please select more progression categories or put more key items in your plando file.")
     
     # If the player gained access to any dungeon item locations, we need to give them those items.
     newly_accessible_dungeon_item_locations = [
@@ -179,7 +179,7 @@ def randomize_progression_items(self):
       # If we're on the last accessible location but not the last item we HAVE to place an item that unlocks new locations.
       # (Otherwise we will still try to place a useful item, but failing will not result in an error.)
       must_place_useful_item = True
-    elif len(accessible_undone_locations) >= 17:
+    elif len(accessible_undone_locations) >= 5:
       # If we have a lot of locations open, we don't need to be so strict with prioritizing currently useful items.
       # This can give the randomizer a chance to place things like Delivery Bag or small keys for dungeons that need x2 to do anything.
       should_place_useful_item = False
@@ -200,10 +200,7 @@ def randomize_progression_items(self):
       self.rng.shuffle(shuffled_list)
       item_name = self.logic.get_first_useful_item(shuffled_list, for_progression=True)
       if item_name is None:
-        if must_place_useful_item:
-          raise Exception("No useful progress items to place! Remaining items: " + ", ".join(possible_items))
-        else:
-          item_name = self.rng.choice(possible_items_when_not_placing_useful)
+        raise Exception("No useful progress items to place! Remaining items: " + ", ".join(possible_items))
     else:
       item_name = self.rng.choice(possible_items_when_not_placing_useful)
     
@@ -212,6 +209,8 @@ def randomize_progression_items(self):
       # We do not weight towards newly accessible locations.
       # And we have to select multiple different locations, one for each item in the group.
       group_name = item_name
+      if len(self.logic.progress_item_groups[group_name]) > len(accessible_undone_locations):
+        raise Exception("Not enough locations left to place progress item group \"%s\"!" % group_name)
       possible_locations_for_group = accessible_undone_locations.copy()
       self.rng.shuffle(possible_locations_for_group)
       self.logic.set_multiple_locations_to_group(possible_locations_for_group, group_name)
